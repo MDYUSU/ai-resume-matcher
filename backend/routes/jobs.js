@@ -4,7 +4,7 @@ const axios = require('axios');
 
 router.get('/', async (req, res) => {
   try {
-    const { query } = req.query;
+    const { query, page = 1 } = req.query; 
     const id = process.env.ADZUNA_APP_ID;
     const key = process.env.ADZUNA_APP_KEY;
 
@@ -15,13 +15,12 @@ router.get('/', async (req, res) => {
 
     // --- HELPER: CLEAN AND SEARCH ---
     const fetchFromAdzuna = async (searchTerm) => {
-      // 1. Clean query: Remove special chars and extra spaces
+      // Clean query: remove special chars but keep spaces for OR logic
       const cleanTerm = searchTerm
         .replace(/[^a-zA-Z0-9\s]/g, ' ') 
         .replace(/\s+/g, ' ')
         .trim();
 
-      // 2. Build URL using URLSearchParams (safest way to avoid 400 errors)
       const params = new URLSearchParams({
         app_id: id,
         app_key: key,
@@ -30,9 +29,9 @@ router.get('/', async (req, res) => {
         'content-type': 'application/json'
       });
 
-      const url = `https://api.adzuna.com/v1/api/jobs/in/search/1?${params.toString()}`;
+      const url = `https://api.adzuna.com/v1/api/jobs/in/search/${page}?${params.toString()}`;
       
-      console.log(`📡 API Request: ${cleanTerm}`);
+      console.log(`📡 API Request: ${cleanTerm} (page ${page})`);
       const resp = await axios.get(url);
       return resp.data?.results || [];
     };
@@ -40,33 +39,50 @@ router.get('/', async (req, res) => {
     // --- EXECUTION LOGIC ---
     let rawResults = [];
     
-    // 1. Determine if the search is for Robotics or Web
+    // 1. IDENTIFY THE SPECIFIC NICHE
     const isRobotics = /robot|ros|embedded|automation/gi.test(query);
+    const isAIML = /ai|ml|machine learning|deep learning|neural/gi.test(query);
+    const isCyber = /cyber|security|pentest|infosec|network security/gi.test(query);
     
-    // 2. Build Intelligent Primary Keywords
+    // 2. BUILD INTELLIGENT PRIMARY KEYWORDS
+    // We remove "level" words but keep the core role words
     let primaryKeywords = (query || "Software Engineer")
-      .replace(/junior|mern|express|js|mongodb|node/gi, '') // Remove limiting web words
+      .replace(/junior|immediate|entry level/gi, '')
       .trim();
 
-    // If string is empty after cleaning, give it a smart default based on niche
-    if (!primaryKeywords) {
-      primaryKeywords = isRobotics ? "Robotics Engineer" : "Full Stack Developer";
+    // 3. APPLY DOMAIN-SPECIFIC BROADENING (Prevents "AND" Problem)
+    if (isAIML) {
+      primaryKeywords = "AI Engineer OR Machine Learning OR Python";
+    } else if (isRobotics) {
+      primaryKeywords = "Robotics Engineer OR Automation OR Embedded";
+    } else if (isCyber) {
+      primaryKeywords = "Cyber Security OR Information Security OR Pentester";
+    } else if (!primaryKeywords) {
+      primaryKeywords = "Full Stack Developer";
     }
 
     try {
       rawResults = await fetchFromAdzuna(primaryKeywords);
     } catch (err) {
-      console.warn("⚠️ Primary search failed with 400. Trying minimal fallback...");
+      console.warn("⚠️ Primary search failed. Trying niche fallback...");
     }
 
-    // 3. ATTEMPT FALLBACK (Only if 0 results found)
+    // 4. SMART FALLBACK: Stay in the same family or return 0
     if (rawResults.length === 0) {
-      // If we were looking for robotics, don't fallback to Full Stack! Fallback to Robotics.
-      const fallbackTerm = isRobotics ? "Robotics" : "Software Developer";
-      rawResults = await fetchFromAdzuna(fallbackTerm);
+      let fallbackTerm = "";
+      
+      // We only fallback to the broad category of the niche
+      if (isRobotics) fallbackTerm = "Robotics";
+      else if (isAIML) fallbackTerm = "Machine Learning";
+      else if (isCyber) fallbackTerm = "Security";
+      else fallbackTerm = "Software Developer"; // General fallback only for web roles
+      
+      if (fallbackTerm) {
+        rawResults = await fetchFromAdzuna(fallbackTerm);
+      }
     }
 
-    // 4. MAP DATA FOR FRONTEND
+    // 5. MAP DATA FOR FRONTEND
     const jobs = rawResults.map(job => ({
       id: job.id,
       title: job.title.replace(/<\/?[^>]+(>|$)/g, ""),
@@ -74,10 +90,14 @@ router.get('/', async (req, res) => {
       location: job.location?.display_name || "India",
       description: job.description.replace(/<\/?[^>]+(>|$)/g, "").substring(0, 150) + "...", 
       url: job.redirect_url,
-      salary: job.salary_min ? `₹${job.salary_min.toLocaleString()}` : "Market Standard"
+      salary: job.salary_max 
+        ? `₹${Number(job.salary_max).toLocaleString('en-IN')}` 
+        : job.salary_min 
+          ? `₹${Number(job.salary_min).toLocaleString('en-IN')}+`
+          : "Market Standard"
     }));
 
-    console.log(`✅ Final Job Count for [${primaryKeywords}]: ${jobs.length}`);
+    console.log(`✅ Final Job Count for [${primaryKeywords}] on Page ${page}: ${jobs.length}`);
     res.json({ success: true, jobs });
 
   } catch (error) {

@@ -10,6 +10,10 @@ const JobResults = () => {
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchRole, setSearchRole] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
   const [activeFilters, setActiveFilters] = useState({
     datePosted: 'any', // '24h', '7d', 'any'
     locationSearch: '', // Input field for location
@@ -22,6 +26,10 @@ const JobResults = () => {
   useEffect(() => {
     setJobs([])
     setSearchRole('')
+    setCurrentPage(1)
+    setLoadingMore(false)
+    setHasMore(true)
+    setSearchQuery('')
     setLoading(true)
   }, [location.key])
 
@@ -47,6 +55,9 @@ const JobResults = () => {
       
       setJobs(location.state.jobs)
       setSearchRole(location.state.role || 'opportunities')
+      setSearchQuery(location.state.searchQuery || location.state.role || 'Software Engineer')
+      setCurrentPage(1)
+      setHasMore(location.state.jobs.length === 10) // Assume initial page had 10 jobs
       setLoading(false)
     } else if (location.state?.role) {
       console.log('🔄 No jobs in state, fetching fresh with role:', location.state.role)
@@ -152,6 +163,34 @@ const JobResults = () => {
     if (desc.includes('mid') || desc.includes('middle')) return 'Mid Level'
     
     return null
+  }
+
+  // Page change function
+  const handlePageChange = async (newPage) => {
+    if (newPage < 1 || loadingMore || !searchQuery) return
+    
+    setLoadingMore(true)
+    try {
+      console.log(`📡 Loading page ${newPage} for query: ${searchQuery}`)
+      
+      const response = await axios.get(`/api/jobs?query=${encodeURIComponent(searchQuery)}&page=${newPage}`)
+      
+      if (response.data.success) {
+        setJobs(response.data.jobs) // Replace current jobs, don't append
+        setCurrentPage(newPage)
+        setHasMore(response.data.jobs.length === 10) // Assume 10 is page size
+        console.log(`✅ Loaded ${response.data.jobs.length} jobs for page ${newPage}`)
+        
+        // Scroll to top smoothly
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      } else {
+        console.log('❌ Failed to load page')
+      }
+    } catch (error) {
+      console.error('❌ Error loading page:', error)
+    } finally {
+      setLoadingMore(false)
+    }
   }
 
   // Helper function to check if job is within date range
@@ -489,8 +528,9 @@ const JobResults = () => {
                       href={job.url} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="block w-full py-3 bg-primary/10 text-primary font-bold rounded-lg hover:bg-primary text-center hover:text-slate-900 transition-all"
+                      className="flex items-center justify-center gap-2 w-full py-3 border-2 border-cyan-500/50 bg-slate-900/50 text-cyan-400 font-bold rounded-lg hover:bg-cyan-500 hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-all"
                     >
+                      <ExternalLink size={16} />
                       Apply Now
                     </a>
                   </div>
@@ -500,13 +540,45 @@ const JobResults = () => {
           )}
         </AnimatePresence>
 
+        {/* Pagination Controller */}
+        {filteredJobs.length > 0 && (
+          <div className="mt-12 flex justify-center">
+            <div className="flex items-center gap-4 px-6 py-4 bg-slate-900/40 border border-cyan-500/20 backdrop-blur-md rounded-2xl">
+              {/* Previous Button */}
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1 || loadingMore}
+                className="px-4 py-2 bg-slate-900/50 border-2 border-cyan-500/50 text-cyan-400 font-bold rounded-lg hover:bg-cyan-500 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <ArrowLeft size={16} />
+                Previous
+              </button>
+
+              {/* Page Indicator */}
+              <div className="px-4 py-2 bg-slate-800/50 border border-cyan-500/30 rounded-lg">
+                <span className="text-cyan-400 font-bold">Page {currentPage}</span>
+              </div>
+
+              {/* Next Button */}
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={loadingMore || (!hasMore && jobs.length < 10)}
+                className="px-4 py-2 bg-slate-900/50 border-2 border-cyan-500/50 text-cyan-400 font-bold rounded-lg hover:bg-cyan-500 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                Next
+                <ArrowLeft size={16} className="rotate-180" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Footer */}
         {filteredJobs.length > 0 && (
           <div className="mt-12 text-center">
             <p className="text-xs text-white/40 mb-4">
               {filteredJobs.length !== jobs.length 
-                ? `Showing ${filteredJobs.length} of ${jobs.length} opportunities` 
-                : `Showing ${filteredJobs.length} opportunities`
+                ? `Showing ${filteredJobs.length} of ${jobs.length} opportunities on Page ${currentPage}` 
+                : `Showing ${filteredJobs.length} opportunities on Page ${currentPage}`
               } • Last updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
             <button
