@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { FileText, Upload, CheckCircle, AlertCircle, Loader2, BrainCircuit, History, Rocket, Settings, Home } from 'lucide-react'
 import axios from 'axios'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -193,52 +193,87 @@ const FileUpload = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] text-white pb-24 relative">
-      <header className="sticky top-0 z-50 flex items-center justify-between p-6 bg-slate-900/50 backdrop-blur-md border-b border-white/5">
+    <div className="min-h-screen bg-black text-zinc-100 pb-24 relative">
+      <header className="sticky top-0 z-50 flex items-center justify-between p-6 bg-black/40 backdrop-blur-xl border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="size-10 rounded-full bg-cyan-500/20 border border-cyan-500/50 flex items-center justify-center font-bold text-cyan-400">YC</div>
-          <h2 className="text-2xl font-bold tracking-tight">Resume Intelligence</h2>
+          <div className="size-10 rounded-full bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center font-bold text-emerald-500">YC</div>
+          <Link href="/" className="cursor-pointer hover:opacity-80 transition-opacity">
+            <h2 className="text-2xl font-bold tracking-tight">Resume <span className="text-green-500">Intelligence</span></h2>
+          </Link>
+        </div>
+        <div className="flex items-center gap-6">
+          <nav className="flex items-center gap-6">
+            <a href="#" className="bg-white/5 text-white px-3 py-1.5 rounded-md border border-white/10 font-medium transition-colors">Dashboard</a>
+            <a href="#" className="text-zinc-400 font-medium hover:text-white transition-colors">History</a>
+            <a href="#" className="text-zinc-400 font-medium hover:text-white transition-colors">Settings</a>
+          </nav>
+          <div className="flex items-center gap-4">
+            <div className="size-8 rounded-full bg-zinc-700 border border-zinc-600 flex items-center justify-center text-xs font-bold text-zinc-300">JD</div>
+            <button className="px-4 py-2 border border-zinc-700 hover:border-zinc-500 hover:bg-white/5 text-white transition-all text-sm font-medium">
+              Sign In
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-5 pt-8 space-y-8">
+      <main className="max-w-5xl mx-auto px-5 pt-8 min-h-[calc(100vh-100px)] flex flex-col justify-center pb-16">
         {isProcessing ? (
           <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="animate-spin text-cyan-400 w-12 h-12 mb-4" />
-            <p className="text-white/60 animate-pulse">AI is decoding your profile...</p>
+            <Loader2 className="animate-spin text-emerald-400 w-12 h-12 mb-4" />
+            <p className="text-zinc-400 animate-pulse">AI is decoding your profile...</p>
           </div>
         ) : !result ? (
-          <div className="space-y-6">
-            <div className="rounded-2xl p-12 border-dashed border-2 border-white/10 flex flex-col items-center justify-center bg-slate-900/20">
-              <input type="file" id="resume-upload" accept=".pdf" onChange={handleFileChange} className="hidden" />
-              <label htmlFor="resume-upload" className="cursor-pointer text-center">
-                <div className="size-20 rounded-2xl bg-cyan-500/10 flex items-center justify-center mx-auto mb-6">
-                  <Upload className="text-cyan-400 w-10 h-10" />
-                </div>
-                <h3 className="font-bold text-xl mb-2">{resumeFile ? resumeFile.name : 'Upload Resume'}</h3>
-              </label>
-              {resumeFile && (
-                <button onClick={handleSubmit} className="w-full max-w-xs mt-6 py-4 bg-cyan-500 text-slate-900 font-bold uppercase rounded-xl hover:bg-cyan-400 transition-all">
-                  Analyze Profile
-                </button>
-              )}
+          <>
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Left Column - Upload Resume */}
+              <div className="rounded-2xl p-12 border-2 border-dashed border-white/10 hover:border-green-500/50 hover:bg-green-500/5 transition-all bg-zinc-900/50 shadow-2xl shadow-black/50 flex flex-col items-center justify-center h-72">
+                <input type="file" id="resume-upload" accept=".pdf" onChange={handleFileChange} className="hidden" />
+                <label htmlFor="resume-upload" className="cursor-pointer text-center">
+                  <div className="size-20 rounded-2xl bg-emerald-500/10 flex items-center justify-center mx-auto mb-6">
+                    <Upload className="text-green-500 w-10 h-10" />
+                  </div>
+                  <h3 className="font-bold text-xl mb-2 text-zinc-100">{resumeFile ? resumeFile.name : 'Upload Resume'}</h3>
+                  <p className="text-zinc-400 text-sm mb-6">Drag & drop your PDF or click to browse</p>
+                </label>
+                {resumeFile && (
+                  <div className="text-center mt-4">
+                    <p className="text-emerald-400 text-sm font-medium">✓ {resumeFile.name}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column - Job Description */}
+              <div className="rounded-2xl bg-zinc-900/50 border border-white/10 shadow-2xl shadow-black/50 h-72">
+                <textarea
+                  value={jobDescription}
+                  onChange={handleJobDescriptionChange}
+                  className="w-full h-full bg-transparent border-0 rounded-2xl p-6 text-zinc-100 placeholder:text-zinc-500 focus-within:border-emerald-500/50 focus-within:ring-1 focus-within:ring-emerald-500/50 transition-all resize-none"
+                  placeholder="Paste complete job description here..."
+                />
+              </div>
             </div>
-            <textarea
-              value={jobDescription}
-              onChange={handleJobDescriptionChange}
-              className="w-full bg-slate-950/40 border border-white/5 text-slate-200 rounded-2xl p-6 min-h-[150px]"
-              placeholder="Paste Job Description..."
-            />
-          </div>
+            
+            {/* Analyze Button - Centered Below Both Columns */}
+            <div className="flex justify-center mt-8">
+              <button
+                onClick={handleSubmit}
+                disabled={!resumeFile || !jobDescription.trim() || isProcessing}
+                className="w-full max-w-md px-12 py-4 bg-[#00E676] hover:bg-[#00C853] text-black font-extrabold tracking-wide uppercase text-sm rounded-xl shadow-[0_0_20px_rgba(0,230,118,0.3)] hover:shadow-[0_0_30px_rgba(0,230,118,0.5)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+              >
+                {isProcessing ? <Loader2 className="animate-spin mr-3" size={20} /> : <BrainCircuit className="mr-3" size={20} />}
+                Analyze Match
+              </button>
+            </div>
+          </>
         ) : (
           <div className="space-y-8">
             <div className="grid md:grid-cols-3 gap-6">
-              <div className="rounded-3xl p-8 flex flex-col items-center justify-center bg-slate-900/60 border border-white/10">
-                <span className="text-4xl font-black text-cyan-400">{result?.matchPercentage}%</span>
-                <span className="text-[10px] font-black uppercase text-white/40">Match Score</span>
+              <div className="rounded-3xl p-8 flex flex-col items-center justify-center bg-zinc-900/60 border border-zinc-800">
+                <span className="text-4xl font-black text-emerald-400">{result?.matchPercentage}%</span>
+                <span className="text-[10px] font-black uppercase text-zinc-400">Match Score</span>
               </div>
-              <div className="md:col-span-2 rounded-3xl p-8 border border-white/10 bg-slate-900/40">
-                <h3 className="text-cyan-400 font-bold mb-4 flex items-center gap-2"><BrainCircuit size={18}/> Feedback</h3>
+              <div className="md:col-span-2 rounded-3xl p-8 border border-zinc-800 bg-zinc-900/40">
+                <h3 className="text-emerald-400 font-bold mb-4 flex items-center gap-2"><BrainCircuit size={18}/> Feedback</h3>
                 <p className="text-sm text-white/80 leading-relaxed">{result?.feedback}</p>
               </div>
             </div>
