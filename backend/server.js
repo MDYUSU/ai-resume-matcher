@@ -51,6 +51,7 @@ mongoose.connect(process.env.MONGO_URI)
 app.use('/api/match', require('./routes/match'));
 app.use('/api/jobs', require('./routes/jobs'));
 app.use('/api/auth', authRoutes);
+app.get('/api/auth/verify', (req, res) => res.json({ message: "Auth route group is working!" }));
 app.use('/api/user', require('./routes/user'));
 
 // Health Check
