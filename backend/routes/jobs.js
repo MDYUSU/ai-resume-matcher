@@ -4,7 +4,10 @@ const axios = require('axios');
 
 router.get('/', async (req, res) => {
   try {
-    const { query, page = 1 } = req.query; 
+    // FIXED: Accept both 'query' and 'role' so it never falls back to Software Engineer by mistake
+    const { query, role, page = 1 } = req.query; 
+    const actualSearchTerm = query || role;
+
     const id = process.env.ADZUNA_APP_ID;
     const key = process.env.ADZUNA_APP_KEY;
 
@@ -13,14 +16,8 @@ router.get('/', async (req, res) => {
       return res.status(500).json({ success: false, message: "Server config error" });
     }
 
-    // --- HELPER: CLEAN AND SEARCH ---
     const fetchFromAdzuna = async (searchTerm) => {
-      // Clean query: remove special chars but keep spaces for OR logic
-      const cleanTerm = searchTerm
-        .replace(/[^a-zA-Z0-9\s]/g, ' ') 
-        .replace(/\s+/g, ' ')
-        .trim();
-
+      const cleanTerm = searchTerm.replace(/[^a-zA-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
       const params = new URLSearchParams({
         app_id: id,
         app_key: key,
@@ -30,27 +27,22 @@ router.get('/', async (req, res) => {
       });
 
       const url = `https://api.adzuna.com/v1/api/jobs/in/search/${page}?${params.toString()}`;
-      
       console.log(`📡 API Request: ${cleanTerm} (page ${page})`);
       const resp = await axios.get(url);
       return resp.data?.results || [];
     };
 
-    // --- EXECUTION LOGIC ---
     let rawResults = [];
     
-    // 1. IDENTIFY THE SPECIFIC NICHE
-    const isRobotics = /robot|ros|embedded|automation/gi.test(query);
-    const isAIML = /ai|ml|machine learning|deep learning|neural/gi.test(query);
-    const isCyber = /cyber|security|pentest|infosec|network security/gi.test(query);
+    // 1. IDENTIFY THE SPECIFIC NICHE (Using actualSearchTerm)
+    const isRobotics = /robot|ros|embedded|automation/gi.test(actualSearchTerm);
+    const isAIML = /ai|ml|machine learning|deep learning|neural/gi.test(actualSearchTerm);
+    const isCyber = /cyber|security|pentest|infosec|network security/gi.test(actualSearchTerm);
     
     // 2. BUILD INTELLIGENT PRIMARY KEYWORDS
-    // We remove "level" words but keep the core role words
-    let primaryKeywords = (query || "Software Engineer")
-      .replace(/junior|immediate|entry level/gi, '')
-      .trim();
+    let primaryKeywords = (actualSearchTerm || "Software Engineer").replace(/junior|immediate|entry level/gi, '').trim();
 
-    // 3. APPLY DOMAIN-SPECIFIC BROADENING (Prevents "AND" Problem)
+    // 3. APPLY DOMAIN-SPECIFIC BROADENING
     if (isAIML) {
       primaryKeywords = "AI Engineer OR Machine Learning OR Python";
     } else if (isRobotics) {
@@ -67,15 +59,13 @@ router.get('/', async (req, res) => {
       console.warn("⚠️ Primary search failed. Trying niche fallback...");
     }
 
-    // 4. SMART FALLBACK: Stay in the same family or return 0
+    // 4. SMART FALLBACK
     if (rawResults.length === 0) {
       let fallbackTerm = "";
-      
-      // We only fallback to the broad category of the niche
       if (isRobotics) fallbackTerm = "Robotics";
       else if (isAIML) fallbackTerm = "Machine Learning";
       else if (isCyber) fallbackTerm = "Security";
-      else fallbackTerm = "Software Developer"; // General fallback only for web roles
+      else fallbackTerm = "Software Developer"; 
       
       if (fallbackTerm) {
         rawResults = await fetchFromAdzuna(fallbackTerm);

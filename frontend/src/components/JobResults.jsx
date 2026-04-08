@@ -33,36 +33,30 @@ const JobResults = () => {
     setLoading(true)
   }, [location.key])
 
+  // --- CRITICAL FIX: ROBUST STATE EXTRACTION ---
   useEffect(() => {
     console.log('🔍 JobResults - location.state:', location.state)
     
-    if (location.state?.jobs) {
-      console.log('✅ Jobs found in state:', location.state.jobs.length)
-      console.log('📊 Jobs data sample:', location.state.jobs[0])
-      
-      // Clean logging for first 3 jobs
-      location.state.jobs.slice(0, 3).forEach((job, index) => {
-        console.log(`🔍 Job ${index + 1} raw data:`, {
-          title: job.title,
-          salary: job.salary,
-          salary_max: job.salary_max,
-          created: job.created,
-          date: job.date,
-          location: job.location,
-          company: job.company
-        })
-      })
-      
-      setJobs(location.state.jobs)
-      setSearchRole(location.state.role || 'opportunities')
-      setSearchQuery(location.state.searchQuery || location.state.role || 'Software Engineer')
+    // Safely unwrap data whether it comes from a fresh scan OR the new Dashboard
+    const state = location.state || {};
+    const scanData = state.scanData || state.data || state;
+    
+    // Extract the exact role and jobs regardless of the container they arrived in
+    const targetRole = scanData?.role || scanData?.jobRole || state.role;
+    const passedJobs = scanData?.jobs || state.jobs;
+
+    if (passedJobs && passedJobs.length > 0) {
+      console.log('✅ Jobs found in state:', passedJobs.length)
+      setJobs(passedJobs)
+      setSearchRole(targetRole || 'opportunities')
+      setSearchQuery(state.searchQuery || targetRole || 'Software Engineer')
       setCurrentPage(1)
-      setHasMore(location.state.jobs.length === 10) // Assume initial page had 10 jobs
+      setHasMore(passedJobs.length === 10) // Assume initial page had 10 jobs
       setLoading(false)
-    } else if (location.state?.role) {
-      console.log('🔄 No jobs in state, fetching fresh with role:', location.state.role)
-      // Fallback fetch if user refreshed page
-      fetchJobsForRole(location.state.role)
+    } else if (targetRole) {
+      console.log('🔄 No jobs in state, fetching fresh with role:', targetRole)
+      // Fallback fetch if user refreshed page OR navigated from Dashboard
+      fetchJobsForRole(targetRole)
     } else {
       console.log('❌ No state provided, redirecting to analysis')
       // No state provided, redirect back to analysis
@@ -73,7 +67,7 @@ const JobResults = () => {
   // Add debug logging for jobs state
   useEffect(() => {
     console.log('📊 Jobs in UI state:', jobs.length)
-    console.log('📊 First job in UI:', jobs[0])
+    if(jobs.length > 0) console.log('📊 First job in UI:', jobs[0])
   }, [jobs])
 
   const fetchJobsForRole = async (role) => {
@@ -98,25 +92,20 @@ const JobResults = () => {
   const extractSalary = (salaryString) => {
     if (!salaryString || salaryString === 'Salary not disclosed') return 0
     
-    console.log('💰 Raw salary string:', salaryString)
-    
     // Extract numbers from salary string
     const numbers = salaryString.match(/[\d,]+/g)
     if (!numbers) return 0
     
     // Get the first number (lower bound of range)
     const rawSalary = parseInt(numbers[0].replace(/,/g, ''))
-    console.log('💰 Extracted raw salary:', rawSalary)
     
     // Detection logic: if salary > 100,000, assume it's already in INR
     if (rawSalary > 100000) {
-      console.log('💰 Salary detected as INR (>', 100000, '), no conversion needed')
       return rawSalary
     }
     
     // Otherwise, assume it's USD and convert to INR
     const convertedSalary = Math.round(rawSalary * 83)
-    console.log('💰 Salary converted from USD to INR:', rawSalary, 'USD ->', convertedSalary, 'INR')
     return convertedSalary
   }
 
@@ -207,16 +196,14 @@ const JobResults = () => {
         dateObj = new Date(jobDate.replace(/(\d{1,2})\/(\d{1,2})\/(\d{4})/, '$3-$2-$1'))
       }
     } catch (error) {
-      console.log('❌ Date parsing error for:', jobDate)
       return true // Don't filter out if date parsing fails
     }
     
     if (isNaN(dateObj.getTime())) {
-      console.log('❌ Invalid date format:', jobDate)
       return true // Don't filter out if date is invalid
     }
     
-    // Use timezone-aware comparison for March 1, 2026
+    // Use timezone-aware comparison
     const today = new Date()
     const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0)
     const jobDateTime = dateObj.getTime()
@@ -224,27 +211,19 @@ const JobResults = () => {
     
     if (filter === '24h') {
       const yesterdayStart = todayStart.getTime() - dayInMs
-      const within24h = jobDateTime >= yesterdayStart
-      console.log(`📅 24h check: ${jobDate} -> ${within24h ? 'PASS' : 'FAIL'} (after ${new Date(yesterdayStart).toLocaleString()})`)
-      return within24h
+      return jobDateTime >= yesterdayStart
     } else if (filter === '7d') {
       const weekAgoStart = todayStart.getTime() - (7 * dayInMs)
-      const within7d = jobDateTime >= weekAgoStart
-      console.log(`📅 7d check: ${jobDate} -> ${within7d ? 'PASS' : 'FAIL'} (after ${new Date(weekAgoStart).toLocaleString()})`)
-      return within7d
+      return jobDateTime >= weekAgoStart
     }
     return true
   }
 
   // Filter jobs based on active filters
   const filteredJobs = useMemo(() => {
-    console.log('🔍 Starting filter with active filters:', activeFilters)
-    console.log('📊 Total jobs to filter:', jobs.length)
-    
     const filtered = jobs.filter((job, index) => {
       // Date filter - 'any' should return true
       if (!isWithinDateRange(job.date, activeFilters.datePosted)) {
-        console.log(`❌ Job ${index} failed date filter: ${job.date}`)
         return false
       }
       
@@ -255,12 +234,10 @@ const JobResults = () => {
         
         // Skip if location is 'India' (too broad)
         if (jobLocation === 'india') {
-          console.log(`❌ Job ${index} skipped - location too broad: "${job.location}"`)
           return false
         }
         
         if (!jobLocation.includes(searchTerm)) {
-          console.log(`❌ Job ${index} failed location filter: "${job.location}" doesn't include "${activeFilters.locationSearch}"`)
           return false
         }
       }
@@ -268,25 +245,14 @@ const JobResults = () => {
       // Experience filter - 'any' should return true
       const jobExperience = extractExperience(job.description)
       if (activeFilters.experience !== 'any' && jobExperience !== activeFilters.experience) {
-        console.log(`❌ Job ${index} failed experience filter: detected "${jobExperience}" != selected "${activeFilters.experience}"`)
         return false
       }
       
-      console.log(`✅ Job ${index} passed all filters: ${job.title}`)
       return true
     })
     
-    console.log('🎯 Filter result:', filtered.length, 'jobs passed filters')
-    console.log('📈 Filter ratio:', filtered.length, '/', jobs.length, '=', Math.round((filtered.length / jobs.length) * 100) + '%')
-    
     return filtered
   }, [jobs, activeFilters])
-
-  // Get unique locations from jobs for dropdown (removed since using input field)
-  // const uniqueLocations = useMemo(() => {
-  //   const locations = [...new Set(jobs.map(job => job.location.split(',')[0]))].filter(Boolean)
-  //   return locations.sort()
-  // }, [jobs])
 
   // Update filter state
   const updateFilter = (filterType, value) => {
@@ -317,11 +283,7 @@ const JobResults = () => {
   }).length
 
   const handleBackToAnalysis = () => {
-    navigate('/')
-  }
-
-  const openJobLink = (url) => {
-    window.open(url, '_blank')
+    navigate('-1')
   }
 
   if (loading) {
@@ -345,7 +307,7 @@ const JobResults = () => {
             className="p-2 rounded-lg glass-panel hover:border-primary/40 transition-all flex items-center gap-2"
           >
             <ArrowLeft size={20} />
-            <span className="hidden sm:inline">Back to Analysis</span>
+            <span className="hidden sm:inline">Back</span>
           </button>
           <div className="flex items-center gap-3">
             <div className="size-10 rounded-full border border-primary/50 p-0.5 overflow-hidden flex items-center justify-center bg-primary/20 font-bold text-primary">YC</div>
@@ -522,13 +484,12 @@ const JobResults = () => {
                     </div>
                   </div>
 
-                  {/* --- CRITICAL CHANGE HERE --- */}
                   <div className="mt-6">
                     <a 
                       href={job.url} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 w-full py-3 border-2 border-cyan-500/50 bg-slate-900/50 text-cyan-400 font-bold rounded-lg hover:bg-cyan-500 hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-all"
+                      className="flex items-center justify-center gap-2 w-full py-3 border-2 border-cyan-500/50 bg-slate-900/50 text-cyan-400 font-bold rounded-lg hover:bg-cyan-500 hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-all hover:text-black"
                     >
                       <ExternalLink size={16} />
                       Apply Now
@@ -548,7 +509,7 @@ const JobResults = () => {
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1 || loadingMore}
-                className="px-4 py-2 bg-slate-900/50 border-2 border-cyan-500/50 text-cyan-400 font-bold rounded-lg hover:bg-cyan-500 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 bg-slate-900/50 border-2 border-cyan-500/50 text-cyan-400 font-bold rounded-lg hover:bg-cyan-500 hover:text-black hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 <ArrowLeft size={16} />
                 Previous
@@ -563,7 +524,7 @@ const JobResults = () => {
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={loadingMore || (!hasMore && jobs.length < 10)}
-                className="px-4 py-2 bg-slate-900/50 border-2 border-cyan-500/50 text-cyan-400 font-bold rounded-lg hover:bg-cyan-500 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 bg-slate-900/50 border-2 border-cyan-500/50 text-cyan-400 font-bold rounded-lg hover:bg-cyan-500 hover:text-black hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 Next
                 <ArrowLeft size={16} className="rotate-180" />

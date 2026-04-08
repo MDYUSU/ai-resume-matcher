@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { FileText, Upload, CheckCircle, AlertCircle, Loader2, BrainCircuit, History, Rocket, Settings, Home } from 'lucide-react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { FileText, Upload, CheckCircle, AlertCircle, Loader2, BrainCircuit, History, Rocket, Settings, Home, ArrowRight, FileText as MasterResumeIcon } from 'lucide-react'
 import axios from 'axios'
 import { motion, AnimatePresence } from 'framer-motion'
+import Header from './Header'
+import { useAuth } from '../contexts/AuthContext'
 
 // Sub-component for individual questions
 const QuestionCard = ({ q, index }) => {
@@ -20,12 +22,12 @@ const QuestionCard = ({ q, index }) => {
           {showAnswer ? 'Hide Answer' : 'Show Answer'}
         </button>
       </div>
-      
+
       <AnimatePresence>
         {showAnswer && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0 }} 
-            animate={{ height: 'auto', opacity: 1 }} 
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
@@ -50,24 +52,47 @@ const QuestionCard = ({ q, index }) => {
 
 const FileUpload = () => {
   const navigate = useNavigate()
+  const location = useLocation() // Added location to catch Dashboard data
+  const { user, isAuthenticated } = useAuth()
+
   const [resumeFile, setResumeFile] = useState(null)
   const [jobDescription, setJobDescription] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [searchingJobs, setSearchingJobs] = useState(false)
-  
-  // SEPARATE PERSISTENT STATES
-  const [technicalQuestions, setTechnicalQuestions] = useState([])
-  const [behavioralQuestions, setBehavioralQuestions] = useState([])
-  const [roadmapData, setRoadmapData] = useState([])
-  
-  const [activeInterviewTab, setActiveInterviewTab] = useState('technical')
-  const [currentPage, setCurrentPage] = useState({ technical: 1, behavioral: 1, roadmap: 1 })
-  const [isGeneratingMore, setIsGeneratingMore] = useState(false)
-  
+  const [useMasterResume, setUseMasterResume] = useState(false)
+  const [masterResumeText, setMasterResumeText] = useState('')
+  const [masterResumeName, setMasterResumeName] = useState('')
+
   const [persistentResume, setPersistentResume] = useState('')
   const [persistentJobDescription, setPersistentJobDescription] = useState('')
+
+  // --- CRITICAL FIX: CATCH DASHBOARD DATA WITH NEW UI FIELDS ---
+  useEffect(() => {
+    if (location.state?.scanData) {
+      const scan = location.state.scanData;
+
+      // We map the database saved variables back into the UI format
+      setResult({
+        role: scan.jobRole || scan.role,
+        overallMatchScore: scan.matchScore || scan.overallMatchScore,
+        aiFeedback: scan.suggestions || scan.aiFeedback,
+        resumeText: scan.resumeText,
+        // Pulling the newly saved rich data!
+        scoreBreakdown: scan.scoreBreakdown || {},
+        keywords: {
+          missing: scan.missingKeywords || [],
+          matched: scan.keywords || []
+        },
+        improvementTips: scan.improvementTips || []
+      });
+
+      setPersistentResume(scan.resumeText || '');
+      setPersistentJobDescription(scan.jobDescription || '');
+      setJobDescription(scan.jobDescription || '');
+    }
+  }, [location.state]);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0]
@@ -84,89 +109,63 @@ const FileUpload = () => {
     setError('')
   }
 
-  const handleInterviewPrep = async (isLoadMore = false) => {
-    const finalResume = persistentResume || result?.resumeText || '';
-    const finalJD = persistentJobDescription || jobDescription || '';
-    
-    if (!finalResume || !finalJD) {
-      setError('Data missing. Please re-analyze.');
-      return;
-    }
+  // Fetch master resume on component mount
+  useEffect(() => {
+    const fetchMasterResume = async () => {
+      if (isAuthenticated) {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await axios.get('/api/user/profile', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
 
-    setIsGeneratingMore(true);
-    setError('');
-
-    try {
-      console.log(`📡 Requesting ${activeInterviewTab} - Page ${isLoadMore ? currentPage[activeInterviewTab] + 1 : 1}`);
-      
-      const response = await axios.post('/api/match/generate-prep', {
-        resumeText: finalResume,
-        jobDescription: finalJD.trim(),
-        type: activeInterviewTab,
-        page: isLoadMore ? currentPage[activeInterviewTab] + 1 : 1
-      });
-
-      console.log('📥 API Response Received:', response.data);
-      console.log("📥 Raw Data from Backend:", response.data);
-
-      if (response.data.success) {
-        const data = response.data.interviewPrep || {};
-        
-        // Debug: Log full response structure
-        console.log('🔍 Full response data:', response.data);
-        console.log('🔍 Interview prep data:', data);
-        console.log('🔍 Available keys in data:', Object.keys(data));
-        
-        // This is the CRITICAL fix: Ensure frontend reads from correct path
-        const newTech = data.technicalQuestions || data.technical || [];
-        const newBehav = data.behavioralQuestions || data.behavioral || [];
-        const newRoadmap = data.roadmap || [];
-
-        console.log('🔍 Extracted data:', {
-          newTech: newTech.length,
-          newBehav: newBehav.length,
-          newRoadmap: newRoadmap.length
-        });
-
-        if (activeInterviewTab === 'technical') {
-          const newTech = data.technicalQuestions || data.technical || [];
-          setTechnicalQuestions(prev => isLoadMore ? [...prev, ...newTech] : newTech);
-        } else if (activeInterviewTab === 'behavioral') {
-          const newBehav = data.behavioralQuestions || data.behavioral || [];
-          setBehavioralQuestions(prev => isLoadMore ? [...prev, ...newBehav] : newBehav);
-        }
-
-        if (newRoadmap.length > 0) setRoadmapData(newRoadmap);
-
-        if (isLoadMore) {
-          setCurrentPage(prev => ({ ...prev, [activeInterviewTab]: prev[activeInterviewTab] + 1 }));
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          if (response.data.success) {
+            setMasterResumeText(response.data.data.masterResumeText || '');
+            setMasterResumeName(response.data.data.masterResumeName || '');
+          }
+        } catch (error) {
+          console.error('Failed to fetch master resume:', error);
         }
       }
-    } catch (err) {
-      console.error("❌ API Error:", err.response?.data || err.message);
-      setError('API Error. Check console for details.');
-    } finally {
-      setIsGeneratingMore(false);
-    }
-  };
+    };
+
+    fetchMasterResume();
+  }, [isAuthenticated]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setResult(null);
-    setTechnicalQuestions([]);
-    setBehavioralQuestions([]);
-    setRoadmapData([]);
     setIsProcessing(true);
 
-    const formData = new FormData();
-    formData.append('resume', resumeFile);
-    formData.append('jobDescription', jobDescription);
-
     try {
-      const response = await axios.post('/api/match', formData);
+      let response;
+      const token = localStorage.getItem('token');
+
+      if (useMasterResume) {
+        // Use master resume text directly
+        response = await axios.post('/api/match', {
+          resumeText: masterResumeText,
+          jobDescription: jobDescription
+        }, {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          }
+        });
+      } else {
+        // Use uploaded PDF file
+        const formData = new FormData();
+        formData.append('resume', resumeFile);
+        formData.append('jobDescription', jobDescription);
+        response = await axios.post('/api/match', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          }
+        });
+      }
+
       if (response.data.success) {
-        setResult(response.data.data); 
+        setResult(response.data.data);
         setPersistentResume(response.data.resumeText || '');
         setPersistentJobDescription(jobDescription);
       }
@@ -183,7 +182,15 @@ const FileUpload = () => {
       const role = result?.role || 'Software Engineer';
       const response = await axios.get(`/api/jobs?query=${encodeURIComponent(role)}`);
       if (response.data.success) {
-        navigate('/jobs', { state: { jobs: response.data.jobs, role: role } });
+        navigate('/jobs', {
+          state: {
+            jobs: response.data.jobs,
+            role: role,
+            resumeText: persistentResume || result?.resumeText,
+            jobDescription: persistentJobDescription || jobDescription,
+            scanData: result
+          }
+        });
       }
     } catch (err) {
       setError('Job search failed.');
@@ -194,50 +201,67 @@ const FileUpload = () => {
 
   return (
     <div className="min-h-screen bg-black text-zinc-100 pb-24 relative">
-      <header className="sticky top-0 z-50 flex items-center justify-between p-6 bg-black/40 backdrop-blur-xl border-b border-white/10">
-        <div className="flex items-center gap-3">
-          <div className="size-10 rounded-full bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center font-bold text-emerald-500">YC</div>
-          <Link href="/" className="cursor-pointer hover:opacity-80 transition-opacity">
-            <h2 className="text-2xl font-bold tracking-tight">Resume <span className="text-green-500">Intelligence</span></h2>
-          </Link>
-        </div>
-        <div className="flex items-center gap-6">
-          <nav className="flex items-center gap-6">
-            <a href="#" className="bg-white/5 text-white px-3 py-1.5 rounded-md border border-white/10 font-medium transition-colors">Dashboard</a>
-            <a href="#" className="text-zinc-400 font-medium hover:text-white transition-colors">History</a>
-            <a href="#" className="text-zinc-400 font-medium hover:text-white transition-colors">Settings</a>
-          </nav>
-          <div className="flex items-center gap-4">
-            <div className="size-8 rounded-full bg-zinc-700 border border-zinc-600 flex items-center justify-center text-xs font-bold text-zinc-300">JD</div>
-            <button className="px-4 py-2 border border-zinc-700 hover:border-zinc-500 hover:bg-white/5 text-white transition-all text-sm font-medium">
-              Sign In
-            </button>
-          </div>
-        </div>
-      </header>
+      <Header />
 
-      <main className="max-w-5xl mx-auto px-5 pt-8 min-h-[calc(100vh-100px)] flex flex-col justify-center pb-16">
+      <main className="max-w-5xl mx-auto px-5 pt-8 min-h-[calc(100vh-100px)] flex flex-col pb-16">
         {isProcessing ? (
-          <div className="flex flex-col items-center justify-center py-20">
+          <div className="flex flex-col items-center justify-center py-32 flex-1">
             <Loader2 className="animate-spin text-emerald-400 w-12 h-12 mb-4" />
             <p className="text-zinc-400 animate-pulse">AI is decoding your profile...</p>
           </div>
         ) : !result ? (
-          <>
+          <div className="flex-1 flex flex-col justify-center">
             <div className="grid md:grid-cols-2 gap-8">
               {/* Left Column - Upload Resume */}
-              <div className="rounded-2xl p-12 border-2 border-dashed border-white/10 hover:border-green-500/50 hover:bg-green-500/5 transition-all bg-zinc-900/50 shadow-2xl shadow-black/50 flex flex-col items-center justify-center h-72">
-                <input type="file" id="resume-upload" accept=".pdf" onChange={handleFileChange} className="hidden" />
-                <label htmlFor="resume-upload" className="cursor-pointer text-center">
-                  <div className="size-20 rounded-2xl bg-emerald-500/10 flex items-center justify-center mx-auto mb-6">
-                    <Upload className="text-green-500 w-10 h-10" />
-                  </div>
-                  <h3 className="font-bold text-xl mb-2 text-zinc-100">{resumeFile ? resumeFile.name : 'Upload Resume'}</h3>
-                  <p className="text-zinc-400 text-sm mb-6">Drag & drop your PDF or click to browse</p>
-                </label>
-                {resumeFile && (
-                  <div className="text-center mt-4">
-                    <p className="text-emerald-400 text-sm font-medium">✓ {resumeFile.name}</p>
+              <div className="rounded-2xl bg-zinc-900/50 border border-white/10 shadow-2xl shadow-black/50 p-6">
+                {/* File Upload Area */}
+                <div className="border-2 border-dashed border-white/10 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all rounded-xl p-8 flex flex-col items-center justify-center h-56">
+                  <input type="file" id="resume-upload" accept=".pdf" onChange={handleFileChange} className="hidden" />
+                  <label htmlFor="resume-upload" className="cursor-pointer text-center">
+                    <div className="size-16 rounded-xl bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+                      <Upload className="text-emerald-500 w-8 h-8" />
+                    </div>
+                    <h3 className="font-bold text-lg mb-2 text-zinc-100">{resumeFile ? resumeFile.name : 'Upload Resume'}</h3>
+                    <p className="text-zinc-400 text-sm mb-4">Drag & drop your PDF or click to browse</p>
+                  </label>
+                  {resumeFile && (
+                    <div className="text-center mt-3">
+                      <p className="text-emerald-400 text-sm font-medium">× {resumeFile.name}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Master Resume Option */}
+                {isAuthenticated && masterResumeText && (
+                  <div className="mt-4">
+                    <button
+                      onClick={() => setUseMasterResume(!useMasterResume)}
+                      className={`w-full py-3 px-4 rounded-xl border transition-all font-medium flex items-center justify-center gap-3 ${useMasterResume
+                          ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
+                          : 'bg-zinc-800/50 border-white/10 text-white hover:border-emerald-500/30 hover:bg-emerald-500/5'
+                        }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-3">
+                          <MasterResumeIcon size={20} />
+                          <span>Use Master Resume: {masterResumeName}</span>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevents the main button from clicking
+                            navigate('/profile');
+                          }}
+                          className="text-xs text-zinc-400 hover:text-emerald-400 underline px-2 py-1"
+                        >
+                          Change
+                        </button>
+                      </div>
+                    </button>
+                    {useMasterResume && (
+                      <div className="mt-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                        <p className="text-emerald-400 text-sm">Using your saved master resume for quick analysis</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -252,182 +276,164 @@ const FileUpload = () => {
                 />
               </div>
             </div>
-            
-            {/* Analyze Button - Centered Below Both Columns */}
-            <div className="flex justify-center mt-8">
+
+            {/* Analyze Button */}
+            <div className="flex justify-center mt-12">
               <button
                 onClick={handleSubmit}
-                disabled={!resumeFile || !jobDescription.trim() || isProcessing}
+                disabled={(!useMasterResume && !resumeFile) || !jobDescription.trim() || isProcessing}
                 className="w-full max-w-md px-12 py-4 bg-[#00E676] hover:bg-[#00C853] text-black font-extrabold tracking-wide uppercase text-sm rounded-xl shadow-[0_0_20px_rgba(0,230,118,0.3)] hover:shadow-[0_0_30px_rgba(0,230,118,0.5)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
               >
                 {isProcessing ? <Loader2 className="animate-spin mr-3" size={20} /> : <BrainCircuit className="mr-3" size={20} />}
                 Analyze Match
               </button>
             </div>
-          </>
+          </div>
         ) : (
-          <div className="space-y-8">
-            <div className="grid md:grid-cols-3 gap-6">
-              <div className="rounded-3xl p-8 flex flex-col items-center justify-center bg-zinc-900/60 border border-zinc-800">
-                <span className="text-4xl font-black text-emerald-400">{result?.matchPercentage}%</span>
-                <span className="text-[10px] font-black uppercase text-zinc-400">Match Score</span>
-              </div>
-              <div className="md:col-span-2 rounded-3xl p-8 border border-zinc-800 bg-zinc-900/40">
-                <h3 className="text-emerald-400 font-bold mb-4 flex items-center gap-2"><BrainCircuit size={18}/> Feedback</h3>
-                <p className="text-sm text-white/80 leading-relaxed">{result?.feedback}</p>
-              </div>
-            </div>
-
-            {/* ACTION BUTTONS WITH HOVER/SPINNER */}
-            <div className="flex flex-wrap justify-center gap-6 py-4">
-              <button
-                onClick={() => handleInterviewPrep(false)}
-                disabled={isGeneratingMore}
-                className={`px-10 py-5 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold uppercase tracking-widest rounded-2xl flex items-center gap-3 transition-all shadow-lg 
-                  ${isGeneratingMore ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95 hover:shadow-[0_0_25px_rgba(219,39,119,0.6)]'}`}
-              >
-                {isGeneratingMore ? <Loader2 className="animate-spin" size={20} /> : <Rocket size={20} />}
-                Generate Interview Prep
-              </button>
-              
-              <button
-                onClick={handleManualJobSearch}
-                disabled={searchingJobs}
-                className="px-10 py-5 bg-slate-900 border-2 border-cyan-500/30 text-cyan-400 font-bold uppercase tracking-widest rounded-2xl flex items-center gap-3 transition-all hover:scale-105"
-              >
-                {searchingJobs ? <Loader2 className="animate-spin" size={20} /> : <Home size={20} />}
-                Find Matching Jobs
-              </button>
-            </div>
-
-            {/* INTERVIEW PREP TABS */}
-            {(technicalQuestions.length > 0 || behavioralQuestions.length > 0 || roadmapData.length > 0) && (
-              <div className="rounded-3xl border border-white/10 bg-slate-900/40 overflow-hidden">
-                <div className="flex bg-white/5">
-                  {['technical', 'behavioral', 'roadmap'].map(tab => (
-                    <button
-                      key={tab}
-                      onClick={() => { setActiveInterviewTab(tab); }} 
-                      className={`flex-1 px-6 py-4 text-[10px] font-black uppercase tracking-widest transition-all ${activeInterviewTab === tab ? 'bg-purple-500/20 text-purple-400 border-b-2 border-purple-500' : 'text-white/40'}`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
+          <div className="w-full">
+            {/* Top Header Card */}
+            <div className="rounded-2xl bg-zinc-900 border border-white/10 p-8 mb-8">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-white mb-2">{result?.role || 'MERN Stack Developer'}</h2>
+                  <div className="flex items-center gap-4 text-sm text-zinc-400">
+                    <span>Analysed just now</span>
+                    {isAuthenticated && user && (
+                      <>
+                        <span className="text-emerald-500">•</span>
+                        <span>{user.name || 'User'}</span>
+                      </>
+                    )}
+                  </div>
                 </div>
+                <div className="flex flex-col items-end gap-4">
+                  <div className="bg-emerald-500/10 text-emerald-500 px-4 py-2 rounded-lg border border-emerald-500/20 font-bold text-sm">
+                    {result?.overallMatchScore || 0}% match
+                  </div>
+                  <div className="flex flex-row gap-3 items-center">
+                    <button
+                      onClick={() => navigate('/prep', {
+                        state: {
+                          resumeText: persistentResume || result?.resumeText,
+                          jobDescription: persistentJobDescription || jobDescription,
+                          scanData: result
+                        }
+                      })}
+                      className="bg-emerald-500 text-black font-bold rounded-full px-6 py-3 hover:bg-emerald-400 transition-all flex items-center gap-2"
+                    >
+                      <Rocket size={20} />
+                      Generate interview prep
+                    </button>
+                    <button
+                      onClick={handleManualJobSearch}
+                      disabled={searchingJobs}
+                      className="border border-zinc-700 hover:border-zinc-500 hover:bg-white/5 text-white font-medium rounded-full px-6 py-3 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {searchingJobs ? <Loader2 className="animate-spin" size={20} /> : <Home size={20} />}
+                      Find matching jobs
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-                <div className="p-8">
-                  {activeInterviewTab !== 'roadmap' ? (
-                    <div className="space-y-6 relative z-50">
-                      {activeInterviewTab === 'technical' && (technicalQuestions || []).length > 0 ? (
-                        <>
-                          {technicalQuestions
-  .slice((currentPage.technical - 1) * 10, currentPage.technical * 10)
-  .map((q, i) => (
-    <QuestionCard 
-      key={`tech-${(currentPage.technical - 1) * 10 + i}`} 
-      q={q} 
-      index={(currentPage.technical - 1) * 10 + i} 
-    />
-  ))}
-                          
-                          <div className="relative z-50 pointer-events-auto flex items-center justify-between pt-8 pb-24 border-t border-white/10 mt-10">
-                            <button 
-                              onClick={() => setCurrentPage(prev => ({ ...prev, technical: Math.max(1, prev.technical - 1) }))} 
-                              disabled={currentPage.technical === 1} 
-                              className="text-xs uppercase font-bold text-white/40 disabled:opacity-0 pointer-events-auto cursor-pointer hover:text-cyan-400 transition-colors"
-                            >
-                              ← Previous
-                            </button>
-                            <span className="text-xs font-bold text-purple-400">Page {currentPage.technical}</span>
-                            <button 
-                              onClick={() => {
-                                const maxPage = Math.ceil((technicalQuestions || []).length / 10);
-                                if (currentPage.technical < maxPage) {
-                                  // Navigate to existing page
-                                  setCurrentPage(prev => ({ ...prev, technical: prev.technical + 1 }));
-                                } else {
-                                  // Need to fetch new page
-                                  setIsGeneratingMore(true);
-                                  handleInterviewPrep(true).finally(() => setIsGeneratingMore(false));
-                                }
-                              }} 
-                              disabled={isGeneratingMore}
-                              className="text-xs uppercase font-bold text-purple-400 pointer-events-auto cursor-pointer hover:bg-cyan-500/20 hover:shadow-[0_0_15px_rgba(6,182,212,0.4)] px-4 py-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                            >
-                              {isGeneratingMore ? <Loader2 className="animate-spin" size={18} /> : (currentPage.technical * 10 >= (technicalQuestions || []).length ? 'Next →' : 'Next →')}
-                            </button>
-                          </div>
-                        </>
-                      ) : activeInterviewTab === 'behavioral' && (behavioralQuestions || []).length > 0 ? (
-                        <>
-                          {behavioralQuestions
-  .slice((currentPage.behavioral - 1) * 10, currentPage.behavioral * 10)
-  .map((q, i) => (
-    <QuestionCard 
-      key={`behav-${(currentPage.behavioral - 1) * 10 + i}`} 
-      q={q} 
-      index={(currentPage.behavioral - 1) * 10 + i} 
-    />
-  ))}
-                          
-                          <div className="relative z-50 pointer-events-auto flex items-center justify-between pt-8 pb-24 border-t border-white/10 mt-10">
-                            <button 
-                              onClick={() => setCurrentPage(prev => ({ ...prev, behavioral: Math.max(1, prev.behavioral - 1) }))} 
-                              disabled={currentPage.behavioral === 1} 
-                              className="text-xs uppercase font-bold text-white/40 disabled:opacity-0 pointer-events-auto cursor-pointer hover:text-cyan-400 transition-colors"
-                            >
-                              ← Previous
-                            </button>
-                            <span className="text-xs font-bold text-purple-400">Page {currentPage.behavioral}</span>
-                            <button 
-                              onClick={() => {
-                                const maxPage = Math.ceil((behavioralQuestions || []).length / 10);
-                                if (currentPage.behavioral < maxPage) {
-                                  // Navigate to existing page
-                                  setCurrentPage(prev => ({ ...prev, behavioral: prev.behavioral + 1 }));
-                                } else {
-                                  // Need to fetch new page
-                                  setIsGeneratingMore(true);
-                                  handleInterviewPrep(true).finally(() => setIsGeneratingMore(false));
-                                }
-                              }} 
-                              disabled={isGeneratingMore}
-                              className="text-xs uppercase font-bold text-purple-400 pointer-events-auto cursor-pointer hover:bg-cyan-500/20 hover:shadow-[0_0_15px_rgba(6,182,212,0.4)] px-4 py-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                            >
-                              {isGeneratingMore ? <Loader2 className="animate-spin" size={18} /> : (currentPage.behavioral * 10 >= (behavioralQuestions || []).length ? 'Next →' : 'Next →')}
-                            </button>
-                          </div>
-                        </>
-                      ) : activeInterviewTab === 'roadmap' && (roadmapData || []).length > 0 ? (
-                        <div className="space-y-8 pl-6 border-l-2 border-purple-500/30">
-                          {(roadmapData || []).map((step, i) => (
-                            <div key={i} className="relative bg-slate-800/40 p-6 rounded-2xl border border-white/5">
-                              <div className="absolute -left-[33px] top-6 size-4 bg-purple-500 rounded-full border-4 border-slate-900" />
-                              <h4 className="text-purple-400 font-bold text-xs uppercase mb-1">Step {i + 1}: {step.title}</h4>
-                              <p className="text-white/70 text-sm leading-relaxed">{step.description}</p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-12">
-                          <p className="text-white/60">No questions available. Generate some to get started!</p>
-                        </div>
-                      )}
+            {/* Main Content Row */}
+            <div className="grid lg:grid-cols-3 gap-8 mb-8">
+              {/* Left Column - Radial Gauge */}
+              <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6 flex flex-col items-center justify-center min-h-[300px]">
+                <div className="relative size-40 flex items-center justify-center mb-2">
+                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="40" fill="none" stroke="#374151" strokeWidth="8" />
+                    <circle
+                      cx="50" cy="50" r="40" fill="none" stroke="#10b981" strokeWidth="8"
+                      strokeDasharray="251.2"
+                      strokeDashoffset={251.2 - (251.2 * (result?.overallMatchScore || 0)) / 100}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <div className="absolute flex flex-col items-center justify-center mt-1">
+                    <span className="text-5xl font-black text-emerald-500 leading-none">{result?.overallMatchScore || 0}</span>
+                  </div>
+                </div>
+                <div className="text-[10px] font-black tracking-widest text-zinc-500 uppercase mb-3">/ 100 Match Score</div>
+                <div className="bg-emerald-500/10 text-emerald-500 px-4 py-1.5 rounded-full border border-emerald-500/20 font-bold text-sm">
+                  {result?.overallMatchScore >= 80 ? 'Strong fit' : result?.overallMatchScore >= 60 ? 'Good fit' : 'Needs work'}
+                </div>
+              </div>
+
+              {/* Center Column - AI Feedback Extended */}
+              <div className="lg:col-span-2">
+                <div className="bg-zinc-900 border border-white/10 rounded-2xl p-8 h-full">
+                  <h3 className="text-emerald-500 font-bold text-lg mb-4 flex items-center gap-2">
+                    <BrainCircuit size={20} className="mr-2" />
+                    AI FEEDBACK
+                  </h3>
+                  <div className="text-zinc-300 leading-relaxed text-[15px]">
+                    <div dangerouslySetInnerHTML={{
+                      __html: result?.aiFeedback || "Analysis complete. Review the keyword and score breakdown below."
+                    }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Grid - Three Columns */}
+            <div className="grid md:grid-cols-3 gap-6 mb-8">
+              {/* Column 1: Score Breakdown */}
+              <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6">
+                <h4 className="text-white font-bold text-lg mb-6">Score Breakdown</h4>
+                <div className="space-y-5">
+                  {Object.entries(result?.scoreBreakdown || {}).map(([category, score]) => (
+                    <div key={category} className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-zinc-400 capitalize text-sm">{category}</span>
+                        <span className="text-white font-bold text-sm">{score}%</span>
+                      </div>
+                      <div className="w-full bg-zinc-800 rounded-full h-1.5">
+                        <div
+                          className={`h-1.5 rounded-full ${score >= 80 ? 'bg-emerald-500' : score >= 70 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                          style={{ width: `${score}%` }}
+                        />
+                      </div>
                     </div>
-                  ) : (
-                    <div className="space-y-8 pl-6 border-l-2 border-purple-500/30">
-                      {roadmapData?.map((step, i) => (
-                        <div key={i} className="relative bg-slate-800/40 p-6 rounded-2xl border border-white/5">
-                          <div className="absolute -left-[33px] top-6 size-4 bg-purple-500 rounded-full border-4 border-slate-900" />
-                          <h4 className="text-purple-400 font-bold text-xs uppercase mb-1">Step {i + 1}: {step.title}</h4>
-                          <p className="text-white/70 text-sm leading-relaxed">{step.description}</p>
-                        </div>
-                      ))}
-                    </div>
+                  ))}
+                  {(!result?.scoreBreakdown || Object.keys(result.scoreBreakdown).length === 0) && (
+                    <span className="text-sm text-zinc-500 italic">No score breakdown available.</span>
                   )}
                 </div>
               </div>
-            )}
+
+              {/* Column 2: Missing Keywords */}
+              <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6">
+                <h4 className="text-white font-bold text-lg mb-6">Missing Keywords</h4>
+                <div className="flex flex-wrap gap-2">
+                  {(result?.keywords?.missing || []).map((keyword, i) => (
+                    <span key={i} className="px-3 py-1.5 border border-dashed border-zinc-700 text-zinc-400 rounded-lg text-xs font-medium hover:border-rose-500/50 hover:text-rose-400 hover:bg-rose-500/5 transition-all cursor-default">
+                      {keyword}
+                    </span>
+                  ))}
+                  {(!result?.keywords?.missing || result.keywords.missing.length === 0) && (
+                    <span className="text-sm text-zinc-500 italic">No critical keywords missing.</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Column 3: Improvement Tips */}
+              <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6">
+                <h4 className="text-white font-bold text-lg mb-6">Top Improvement Tips</h4>
+                <div className="space-y-4">
+                  {(result?.improvementTips || []).slice(0, 3).map((tip, i) => (
+                    <div key={i} className={`p-5 rounded-xl border-l-4 bg-gradient-to-r from-zinc-800/80 to-zinc-900/50 ${tip.colorCode === 'rose' ? 'border-rose-500' : 'border-amber-500'}`}>
+                      <p className="text-zinc-400 text-sm leading-relaxed font-medium">{tip.text}</p>
+                    </div>
+                  ))}
+                  {(!result?.improvementTips || result.improvementTips.length === 0) && (
+                    <span className="text-sm text-zinc-500 italic">No specific improvements suggested.</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
           </div>
         )}
       </main>

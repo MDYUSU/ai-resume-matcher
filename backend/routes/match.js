@@ -4,10 +4,10 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Scan = require('../models/Scan');
 const InterviewPrep = require('../models/InterviewPrep');
 const crypto = require('crypto');
+const { protect, optionalAuth } = require('../middleware/authMiddleware');
 const router = express.Router();
 const { analyzeMatch } = require('../controllers/match.controller');
 
-// Configure multer for file uploads in memory
 const upload = multer({ 
   storage: multer.memoryStorage(),
   fileFilter: function (req, file, cb) {
@@ -17,40 +17,39 @@ const upload = multer({
       cb(new Error('Only PDF files are allowed'), false);
     }
   },
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  }
+  limits: { fileSize: 5 * 1024 * 1024 }
 });
 
-// Initialize Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// POST /api/match - Analyze resume
-// This stays as '/' because it's mounted as /api/match in server.js
-router.post('/', upload.single('resume'), analyzeMatch);
+router.post('/', optionalAuth, (req, res, next) => {
+  console.log(`➡️ Incoming Scan Request. Authenticated as: ${req.user ? req.user.email : 'Guest'}`);
+  
+  upload.single('resume')(req, res, function (err) {
+    if (err instanceof multer.MulterError) {
+      console.error("❌ MULTER ERROR:", err.message);
+      return res.status(500).json({ success: false, message: `File upload error: ${err.message}` });
+    } else if (err) {
+      console.error("❌ FILE REJECTION ERROR:", err.message);
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    
+    next();
+  });
+}, analyzeMatch);
 
-// POST /api/match/generate-prep
-// CHANGED: Use '/generate-prep' here. 
-// If your frontend calls /api/match/generate-prep, this is the correct relative path.
 router.post('/generate-prep', async (req, res) => {
   try {
     const { resumeText, jobDescription, type, page = 1 } = req.body;
     
     if (!resumeText || !jobDescription || !type) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Resume text, job description, and type are required' 
-      });
+      return res.status(400).json({ success: false, message: 'Resume text, job description, and type are required' });
     }
 
-    // Create resume hash for caching
     const resumeHash = crypto.createHash('md5').update(resumeText).digest('hex');
     
     console.log(`🔍 Checking cache for: ${type} - Page ${page}`);
-    console.log(`📝 Resume Hash: ${resumeHash}`);
-    console.log(`📄 JD Hash: ${crypto.createHash('md5').update(jobDescription).digest('hex')}`);
 
-    // Check MongoDB cache FIRST (The Quota Saver)
     const cachedData = await InterviewPrep.findOne({
       jobDescription: jobDescription.trim(),
       resumeHash: resumeHash,
@@ -60,168 +59,113 @@ router.post('/generate-prep', async (req, res) => {
 
     if (cachedData) {
       console.log('📦 Served from MongoDB Cache!');
-      console.log(`📊 Cached data keys:`, Object.keys(cachedData.data));
-      
-      return res.json({
-        success: true,
-        interviewPrep: cachedData.data,
-        fromCache: true
-      });
+      return res.json({ success: true, interviewPrep: cachedData.data, fromCache: true });
     }
 
     console.log('📡 Cache miss - Calling Gemini API...');
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
     
-    // STABLE CONFIG: Remove baseUrl and apiVersion if not using a specific proxy
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash-lite" 
-    });
-    
-    const prompt = `Generate 10 unique and highly relevant ${type} interview questions. Output strictly as a JSON array of objects with these keys: 'question', 'intention', 'modelAnswer'.
+    const prompt = `Generate comprehensive interview preparation content based on the resume and job description.
 
-RESUME: ${resumeText}
-JD: ${jobDescription}
+CRITICAL REQUIREMENT: You are generating questions for PAGE ${page}. 
+- You MUST generate EXACTLY 10 technical questions and EXACTLY 10 behavioral questions.
+- You MUST generate completely new, fresh questions that were not asked on previous pages.
+- If page=1, generate foundational technical/behavioral questions.
+- If page=2, generate advanced/deeper scenario questions.
+- If page=3 or higher, generate expert-level edge cases.
 
-Generate exactly this JSON structure:
+Return ONLY a valid JSON object with this exact structure:
 {
   "technicalQuestions": [
-    {
-      "question": "Specific technical question",
-      "intention": "What is interviewer looking for",
-      "modelAnswer": "Detailed model answer"
-    }
+    { "question": "Question here", "modelAnswer": "Answer here", "intention": "Intention here" }
   ],
   "behavioralQuestions": [
-    {
-      "question": "Behavioral question",
-      "guidance": "How to approach"
-    }
+    { "question": "Question here", "modelAnswer": "Answer here", "intention": "Intention here" }
   ],
   "roadmap": [
-    {
-      "title": "Topic",
-      "description": "Task"
-    }
+    { "title": "Title here", "description": "Description here" }
   ]
 }
 
-IMPORTANT: Return ONLY valid JSON. No markdown, no backticks, no text before or after.`;
+Resume: ${resumeText}
+Job Description: ${jobDescription}
+Type: ${type}
+Requested Page Number: ${page}`;
 
-    // Timeout handled by standard fetch options or Promise.race
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.7,
-        topP: 0.95,
-      }
+      generationConfig: { temperature: 0.8, topP: 0.95 }
     });
 
     const response = await result.response;
     const aiText = response.text();
 
-    // 🧼 Enhanced Robust Sanitizer: Strips ```json, markdown, and extra text
-    let cleanJSON = aiText
-      .replace(/^\s*```json?|```\s*$/gm, '') // Remove code blocks
-      .replace(/^[^{]*({.*})[^}]*$/s, '$1') // Extract JSON from surrounding text
-      .replace(/\n/g, ' ') // Replace newlines with spaces
-      .trim();
-    
-    // Additional safety: try to find JSON object in the text
+    let cleanJSON = aiText.replace(/^\s*```json?|```\s*$/gm, '').replace(/^[^{]*({.*})[^}]*$/s, '$1').replace(/\n/g, ' ').trim();
     const jsonMatch = cleanJSON.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      cleanJSON = jsonMatch[0];
-    }
+    if (jsonMatch) cleanJSON = jsonMatch[0];
     
     try {
       const interviewPrep = JSON.parse(cleanJSON);
-      console.log('✅ Successfully generated interview prep');
-      console.log(`📊 Raw AI response keys:`, Object.keys(interviewPrep));
       
-      // FORCE KEY NORMALIZATION - The Quota Saver
-      // No matter what keys Gemini sends, map them to exact keys
       const normalizedData = {
-        // Try multiple possible key variations from Gemini
-        technicalQuestions: interviewPrep.technicalQuestions || 
-                          interviewPrep.technical || 
-                          interviewPrep.tech || 
-                          interviewPrep.questions || 
-                          interviewPrep.tech_questions || 
-                          [],
-        
-        behavioralQuestions: interviewPrep.behavioralQuestions || 
-                           interviewPrep.behavioral || 
-                           interviewPrep.behavior || 
-                           interviewPrep.behav || 
-                           interviewPrep.behavioral_questions || 
-                           [],
-        
-        roadmap: interviewPrep.roadmap || 
-                 interviewPrep.plan || 
-                 interviewPrep.steps || 
-                 []
+        technicalQuestions: interviewPrep.technicalQuestions || interviewPrep.technical || [],
+        behavioralQuestions: interviewPrep.behavioralQuestions || interviewPrep.behavioral || [],
+        roadmap: interviewPrep.roadmap || []
       };
       
-      console.log(`📊 Normalized keys:`, Object.keys(normalizedData));
-      console.log(`📊 Final counts:`, {
-        technical: normalizedData.technicalQuestions.length,
-        behavioral: normalizedData.behavioralQuestions.length,
-        roadmap: normalizedData.roadmap.length
-      });
-      
-      // Fix handshake - exact structure
-      const finalResponse = {
-        success: true,
-        interviewPrep: {
-          technicalQuestions: normalizedData.technicalQuestions,
-          behavioralQuestions: normalizedData.behavioralQuestions,
-          roadmap: normalizedData.roadmap
-        }
-      };
-      
-      console.log(`📊 Final response structure:`, {
-        success: finalResponse.success,
-        interviewPrepKeys: Object.keys(finalResponse.interviewPrep),
-        technicalCount: finalResponse.interviewPrep.technicalQuestions.length,
-        behavioralCount: finalResponse.interviewPrep.behavioralQuestions.length,
-        roadmapCount: finalResponse.interviewPrep.roadmap.length
-      });
-      
-      // Return standardized response
       console.log('💾 Saving to MongoDB Cache...');
+      try {
+        await InterviewPrep.create({
+          jobDescription: jobDescription.trim(),
+          resumeText: resumeText,
+          resumeHash: resumeHash,
+          type: type,
+          page: page,
+          data: normalizedData,
+          userId: req.user?._id || null
+        });
+        console.log('✅ Successfully saved to cache!');
+      } catch (dbError) {
+        console.error('⚠️ Failed to save to MongoDB:', dbError.message);
+      }
       
-      // Save to database AFTER generating
-      await InterviewPrep.create({
-        jobDescription: jobDescription.trim(),
-        resumeHash: resumeHash,
-        resumeText: resumeText,
-        type: type,
-        page: page,
-        data: finalResponse.interviewPrep
-      });
-      
-      console.log('✅ Saved to MongoDB Cache');
-      
-      res.json({
-        ...finalResponse,
-        fromCache: false
-      });
+      res.json({ success: true, interviewPrep: normalizedData });
     } catch (parseError) {
-      console.error('❌ JSON Parse Error. Raw text:', aiText);
       res.status(500).json({ success: false, message: 'AI returned invalid formatting' });
     }
     
   } catch (error) {
-    console.error('❌ Prep Error:', error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// GET /api/match/history
-router.get('/history', async (req, res) => {
+router.get('/history', protect, async (req, res) => {
   try {
-    const scans = await Scan.find().sort({ timestamp: -1 });
+    const scans = await Scan.find({ userId: req.user._id }).sort({ timestamp: -1 });
     res.json({ success: true, data: scans });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.delete('/history/all', protect, async (req, res) => {
+  try {
+    await Scan.deleteMany({ userId: req.user._id });
+    res.json({ success: true, message: 'All scans cleared successfully' });
+  } catch (error) {
+    console.error("❌ CLEAR ALL ERROR:", error);
+    res.status(500).json({ success: false, message: 'Server error deleting all scans' });
+  }
+});
+
+router.delete('/history/:id', protect, async (req, res) => {
+  try {
+    const scan = await Scan.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!scan) return res.status(404).json({ success: false, message: 'Scan not found' });
+    res.json({ success: true, message: 'Scan deleted successfully' });
+  } catch (error) {
+    console.error("DELETE ERROR:", error);
+    res.status(500).json({ success: false, message: 'Server error deleting scan' });
   }
 });
 
