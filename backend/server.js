@@ -73,6 +73,14 @@ app.use((err, req, res, next) => {
 });
 
 // Start Server
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server ready at port ${PORT}`);
+// REPLACE your app.listen with exactly this:
+const server = app.listen(PORT, () => {
+    console.log(`✅ Server is officially listening on port ${PORT}`);
+});
+
+// Add this to handle Render's shutdown signals cleanly
+process.on('SIGTERM', () => {
+  server.close(() => {
+    console.log('Process terminated');
+  });
 });
