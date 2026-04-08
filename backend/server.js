@@ -19,11 +19,14 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 // --- Middleware ---
-// Optimized CORS to allow your Vite frontend specifically
+// Optimized CORS to allow your Vercel frontend in production, and localhost in development
+const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
+
 app.use(cors({
-    origin: 'http://localhost:5173', 
+    origin: allowedOrigin, 
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
 }));
 
 app.use(express.json({ limit: '10mb' })); // Increased limit for long resumes/JDs
@@ -71,6 +74,5 @@ app.use((err, req, res, next) => {
 
 // Start Server
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server ready at http://localhost:${PORT}`);
-    console.log(`📡 API Endpoints: http://localhost:${PORT}/api/match`);
+    console.log(`🚀 Server ready at port ${PORT}`);
 });
