@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { ArrowLeft, Loader2, Briefcase, MapPin, DollarSign, Calendar, ExternalLink, Filter, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import axios from 'axios'
+// Only necessary change: Using your custom axios bridge
+import axios from '../api/axios'
 
 const JobResults = () => {
   const navigate = useNavigate()
@@ -73,6 +74,7 @@ const JobResults = () => {
   const fetchJobsForRole = async (role) => {
     try {
       setLoading(true)
+      // Use instance for baseURL
       const response = await axios.get(`/api/jobs?role=${encodeURIComponent(role)}&location=India&t=${Date.now()}`)
       
       if (response.data.success) {
@@ -161,7 +163,7 @@ const JobResults = () => {
     setLoadingMore(true)
     try {
       console.log(`📡 Loading page ${newPage} for query: ${searchQuery}`)
-      
+      // Use instance for baseURL
       const response = await axios.get(`/api/jobs?query=${encodeURIComponent(searchQuery)}&page=${newPage}`)
       
       if (response.data.success) {
