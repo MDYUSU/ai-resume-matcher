@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BrainCircuit, Calendar, Target, TrendingUp, Eye, FileText, Trash2 } from 'lucide-react';
-import axios from 'axios';
+// This now uses your custom bridge with the Interceptor
+import axios from '../api/axios'; 
 import { useAuth } from '../contexts/AuthContext';
 
 const Dashboard = () => {
@@ -18,10 +19,9 @@ const Dashboard = () => {
 
     const fetchScans = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const response = await axios.get('/api/match/history', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        // CLEANUP: We no longer need to manually pass headers. 
+        // Our axios interceptor handles the token automatically!
+        const response = await axios.get('/api/match/history');
         
         if (response.data.success) {
           setScans(response.data.data);
@@ -38,12 +38,8 @@ const Dashboard = () => {
 
   const handleDelete = async (id) => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete('/api/match/history/' + id, {
-        headers: { Authorization: 'Bearer ' + token }
-      });
-      
-      // Remove the deleted scan from UI
+      // CLEANUP: Manual headers removed
+      await axios.delete('/api/match/history/' + id);
       setScans(scans.filter(s => s._id !== id));
     } catch (error) {
       console.error('Failed to delete scan:', error);
@@ -51,15 +47,12 @@ const Dashboard = () => {
     }
   };
 
-  // 🔥 NEW: Clear All Function
   const handleClearAll = async () => {
     if (window.confirm("Are you sure you want to delete ALL your scan history? This cannot be undone.")) {
       try {
-        const token = localStorage.getItem('token');
-        await axios.delete('/api/match/history/all', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setScans([]); // Instantly empties the dashboard on the screen
+        // CLEANUP: Manual headers removed
+        await axios.delete('/api/match/history/all');
+        setScans([]); 
       } catch (error) {
         console.error("Failed to clear all scans", error);
         alert("Failed to clear history.");
@@ -101,7 +94,6 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2">
             Welcome back, <span className="text-emerald-500">{user?.name}</span>
@@ -109,7 +101,6 @@ const Dashboard = () => {
           <p className="text-zinc-400 text-lg">Your resume analysis history and insights</p>
         </div>
 
-        {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-zinc-900 border border-white/10 rounded-xl p-6">
             <div className="flex items-center justify-between mb-2">
@@ -123,7 +114,7 @@ const Dashboard = () => {
             <div className="flex items-center justify-between mb-2">
               <TrendingUp className="text-emerald-500" size={24} />
               <span className="text-2xl font-bold text-white">
-                {scans.length > 0 ? Math.round(scans.reduce((acc, scan) => acc + scan.matchScore, 0) / scans.length) : 0}%
+                {scans.length > 0 ? Math.round(scans.reduce((acc, scan) => acc + (scan.matchScore || 0), 0) / scans.length) : 0}%
               </span>
             </div>
             <p className="text-zinc-400">Average Match Score</p>
@@ -140,9 +131,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Recent Scans */}
         <div className="mb-8">
-          {/* 🔥 NEW: Header with Clear All Button */}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-white">Recent Resume Scans</h2>
             
@@ -172,7 +161,7 @@ const Dashboard = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {scans.map((scan, index) => (
-                <div key={index} className="bg-zinc-900 border border-white/10 rounded-xl p-6 hover:border-emerald-500/30 transition-all">
+                <div key={scan._id || index} className="bg-zinc-900 border border-white/10 rounded-xl p-6 hover:border-emerald-500/30 transition-all">
                   <div className="flex items-center justify-between mb-4">
                     <div className={`px-3 py-1 rounded-lg border ${getScoreBgColor(scan.matchScore)}`}>
                       <span className={`font-bold ${getScoreColor(scan.matchScore)}`}>
@@ -192,7 +181,7 @@ const Dashboard = () => {
                   </div>
                   
                   <h3 className="text-white font-semibold mb-2 line-clamp-2">
-                    {scan.jobRole || "Software Engineer"}
+                    {scan.jobRole || scan.role || "Software Engineer"}
                   </h3>
                   
                   <p className="text-zinc-400 text-sm mb-4">
