@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Loader2, ArrowLeft, Download } from 'lucide-react';
-import axios from 'axios';
+import axios from '../api/axios';
 import { motion, AnimatePresence } from 'framer-motion'
 
 const SkeletonCard = () => (
@@ -62,11 +62,10 @@ const InterviewPrep = () => {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // Robust extraction of data from location.state
   const state = location.state || {};
   const resumeText = state.resumeText || state.scanData?.resumeText || '';
   const jobDescription = state.jobDescription || state.scanData?.jobDescription || '';
-  const scanData = state.scanData || state.data || state; // Catch-all for the analysis data
+  const scanData = state.scanData || state.data || state;
 
   const [technicalQuestions, setTechnicalQuestions] = useState([]);
   const [behavioralQuestions, setBehavioralQuestions] = useState([]);
@@ -83,7 +82,12 @@ const InterviewPrep = () => {
       return;
     }
 
-    if (!isLoadMore) setInitialLoading(true);
+    if (!isLoadMore) {
+      setInitialLoading(true);
+      setError('');
+    } else {
+      setIsGeneratingMore(true);
+    }
 
     try {
       const response = await axios.post('/api/match/generate-prep', {
@@ -130,7 +134,7 @@ const InterviewPrep = () => {
         }
       }
     } catch (err) {
-      setError('Failed to generate interview prep');
+      setError(err.response?.data?.message || 'Failed to generate interview prep');
     } finally {
       setIsGeneratingMore(false);
       setInitialLoading(false); 
@@ -226,7 +230,7 @@ const InterviewPrep = () => {
                         .slice((currentPage.technical - 1) * 10, currentPage.technical * 10)
                         .map((q, i) => (
                           <QuestionCard key={`tech-${(currentPage.technical - 1) * 10 + i}`} question={q} index={(currentPage.technical - 1) * 10 + i} type="technical" />
-                      ))}
+                        ))}
                       
                       <div className="flex items-center justify-between mt-8 print:hidden">
                         <button 
@@ -243,8 +247,7 @@ const InterviewPrep = () => {
                             if (currentPage.technical < maxPage) {
                               setCurrentPage(prev => ({ ...prev, technical: prev.technical + 1 }));
                             } else {
-                              setIsGeneratingMore(true);
-                              handleInterviewPrep(true).finally(() => setIsGeneratingMore(false));
+                              handleInterviewPrep(true);
                             }
                           }} 
                           disabled={isGeneratingMore}
@@ -271,7 +274,7 @@ const InterviewPrep = () => {
                         .slice((currentPage.behavioral - 1) * 10, currentPage.behavioral * 10)
                         .map((q, i) => (
                           <QuestionCard key={`behav-${(currentPage.behavioral - 1) * 10 + i}`} question={q} index={(currentPage.behavioral - 1) * 10 + i} type="behavioral" />
-                      ))}
+                        ))}
                       
                       <div className="flex items-center justify-between mt-8 print:hidden">
                         <button 
@@ -288,8 +291,7 @@ const InterviewPrep = () => {
                             if (currentPage.behavioral < maxPage) {
                               setCurrentPage(prev => ({ ...prev, behavioral: prev.behavioral + 1 }));
                             } else {
-                              setIsGeneratingMore(true);
-                              handleInterviewPrep(true).finally(() => setIsGeneratingMore(false));
+                              handleInterviewPrep(true);
                             }
                           }} 
                           disabled={isGeneratingMore}
