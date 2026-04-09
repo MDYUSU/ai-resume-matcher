@@ -5,7 +5,6 @@ const multer = require('multer');
 const pdf = require('pdf-parse-fork');
 const router = express.Router();
 
-// Multer setup for PDF uploads
 const upload = multer({ 
   storage: multer.memoryStorage(),
   fileFilter: function (req, file, cb) {
@@ -18,7 +17,6 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }
 });
 
-// GET /api/user/profile - Get user profile
 router.get('/profile', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('-password');
@@ -36,13 +34,11 @@ router.get('/profile', protect, async (req, res) => {
   }
 });
 
-// PUT /api/user/profile - Update user profile (master resume)
 router.put('/profile', protect, upload.single('resume'), async (req, res) => {
   try {
     let masterResumeText = req.body.masterResumeText;
     let masterResumeName = '';
 
-    // If a file is uploaded, extract text from PDF
     if (req.file) {
       try {
         const pdfData = await pdf(req.file.buffer);

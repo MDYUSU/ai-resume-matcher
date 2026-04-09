@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Mail, FileText, CheckCircle, Upload, LogOut } from 'lucide-react';
-import axios from 'axios';
+// Corrected to use your custom axios bridge instance
+import axios from '../api/axios';
 import { useAuth } from '../contexts/AuthContext';
 
 const Profile = () => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [masterResumeName, setMasterResumeName] = useState('');
   const [resumeFile, setResumeFile] = useState(null);
@@ -22,10 +23,8 @@ const Profile = () => {
 
     const fetchProfile = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const response = await axios.get('/api/user/profile', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        // Headers are now handled automatically by your axios interceptor
+        const response = await axios.get('/api/user/profile');
         
         if (response.data.success) {
           setMasterResumeName(response.data.data.masterResumeName || '');
@@ -79,13 +78,12 @@ const Profile = () => {
     setShowSuccess(false);
     
     try {
-      const token = localStorage.getItem('token');
       const formData = new FormData();
       formData.append('resume', resumeFile);
       
+      // Axios instance automatically hits Render and includes your Token
       const response = await axios.put('/api/user/profile', formData, {
         headers: { 
-          Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
         }
       });
@@ -105,9 +103,8 @@ const Profile = () => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('userInfo');
-    window.location.href = '/auth';
+    logout(); 
+    navigate('/auth');
   };
 
   if (loading) {
