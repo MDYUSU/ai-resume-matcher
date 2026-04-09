@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, User, ArrowRight, Loader2 } from 'lucide-react';
-import axios from 'axios';
+// Corrected path based on your folder structure
+import axios from '../api/axios';
 
 const AuthPage = () => {
   const navigate = useNavigate();
@@ -27,7 +28,8 @@ const AuthPage = () => {
       const response = await axios.post(endpoint, formData);
       if (response.data.success) {
         localStorage.setItem('token', response.data.token);
-        localStorage.setItem('userInfo', JSON.stringify(response.data));
+        localStorage.setItem('userInfo', JSON.stringify(response.data.user || response.data));
+        // Using window.location to force a fresh state with the new token
         window.location.href = '/';
       }
     } catch (err) {

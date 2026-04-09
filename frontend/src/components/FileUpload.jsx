@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { FileText, Upload, CheckCircle, AlertCircle, Loader2, BrainCircuit, History, Rocket, Settings, Home, ArrowRight, FileText as MasterResumeIcon } from 'lucide-react'
-import axios from 'axios'
+import axios from '../api/axios';
 import { motion, AnimatePresence } from 'framer-motion'
 import Header from './Header'
 import { useAuth } from '../contexts/AuthContext'
@@ -115,9 +115,7 @@ const FileUpload = () => {
       if (isAuthenticated) {
         try {
           const token = localStorage.getItem('token');
-          const response = await axios.get('/api/user/profile', {
-            headers: { Authorization: `Bearer ${token}` }
-          });
+         const response = await axios.get('/api/user/profile');
 
           if (response.data.success) {
             setMasterResumeText(response.data.data.masterResumeText || '');
@@ -156,12 +154,10 @@ const FileUpload = () => {
         const formData = new FormData();
         formData.append('resume', resumeFile);
         formData.append('jobDescription', jobDescription);
-        response = await axios.post('/api/match', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          }
-        });
+      // The custom instance already has the token attached!
+response = await axios.post('/api/match', formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
       }
 
       if (response.data.success) {
