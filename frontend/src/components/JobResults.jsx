@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { ArrowLeft, Loader2, Briefcase, MapPin, DollarSign, Calendar, ExternalLink, Filter, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-// Only necessary change: Using your custom axios bridge
+// Necessary change: Using your custom axios bridge
 import axios from '../api/axios'
 
 const JobResults = () => {
@@ -74,7 +74,6 @@ const JobResults = () => {
   const fetchJobsForRole = async (role) => {
     try {
       setLoading(true)
-      // Use instance for baseURL
       const response = await axios.get(`/api/jobs?role=${encodeURIComponent(role)}&location=India&t=${Date.now()}`)
       
       if (response.data.success) {
@@ -163,7 +162,7 @@ const JobResults = () => {
     setLoadingMore(true)
     try {
       console.log(`📡 Loading page ${newPage} for query: ${searchQuery}`)
-      // Use instance for baseURL
+      
       const response = await axios.get(`/api/jobs?query=${encodeURIComponent(searchQuery)}&page=${newPage}`)
       
       if (response.data.success) {
@@ -285,51 +284,51 @@ const JobResults = () => {
   }).length
 
   const handleBackToAnalysis = () => {
-    navigate('-1')
+    navigate('/')
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_#1e293b,_#0f172a,_#020617)] text-white font-display flex items-center justify-center">
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="animate-spin text-primary w-12 h-12 mb-4 mx-auto" />
-          <p className="text-white/60">Loading job opportunities...</p>
+          <Loader2 className="animate-spin text-emerald-500 w-12 h-12 mb-4 mx-auto" />
+          <p className="text-zinc-400 font-medium">Loading job opportunities...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_#1e293b,_#0f172a,_#020617)] text-white font-display">
+    <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <header className="sticky top-0 z-50 flex items-center justify-between p-6 glass-panel border-b border-primary/10 bg-slate-900/50 backdrop-blur-md">
+      <header className="sticky top-0 z-50 flex items-center justify-between p-6 bg-zinc-900/50 border-b border-white/10 backdrop-blur-md">
         <div className="flex items-center gap-4">
           <button
             onClick={handleBackToAnalysis}
-            className="p-2 rounded-lg glass-panel hover:border-primary/40 transition-all flex items-center gap-2"
+            className="p-2 rounded-lg bg-zinc-800 border border-white/10 hover:border-emerald-500/40 transition-all flex items-center gap-2"
           >
             <ArrowLeft size={20} />
-            <span className="hidden sm:inline">Back</span>
+            <span className="hidden sm:inline font-bold">Back</span>
           </button>
           <div className="flex items-center gap-3">
-            <div className="size-10 rounded-full border border-primary/50 p-0.5 overflow-hidden flex items-center justify-center bg-primary/20 font-bold text-primary">YC</div>
+            <div className="size-10 rounded-full border border-emerald-500/50 flex items-center justify-center bg-emerald-500/20 font-bold text-emerald-500">YC</div>
             <h2 className="text-2xl font-bold tracking-tight">Job Opportunities</h2>
           </div>
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <p className="text-xs text-white/40">
+            <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider">
               {filteredJobs.length !== jobs.length ? 'Showing' : 'Found'}
             </p>
-            <p className="text-lg font-bold text-primary">{filteredJobs.length} matching roles</p>
+            <p className="text-lg font-bold text-emerald-500">{filteredJobs.length} roles</p>
           </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="relative p-2 rounded-lg glass-panel hover:border-primary/40 transition-all flex items-center gap-2"
+            className="relative p-2 rounded-lg bg-zinc-800 border border-white/10 hover:border-emerald-500/40 transition-all flex items-center gap-2"
           >
-            <span className="text-sm">🔍 Filter Results</span>
+            <span className="text-sm font-bold">🔍 Filter Results</span>
             {activeFilterCount > 0 && (
-              <span className="absolute -top-1 -right-1 size-5 bg-primary text-slate-900 rounded-full text-xs font-bold flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 size-5 bg-emerald-500 text-black rounded-full text-xs font-bold flex items-center justify-center">
                 {activeFilterCount}
               </span>
             )}
@@ -342,9 +341,9 @@ const JobResults = () => {
         {/* Search Status */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold mb-2">
-            Scanning for <span className="text-primary">{searchRole}</span> roles
+            Scanning for <span className="text-emerald-500">{searchRole}</span> roles
           </h1>
-          <p className="text-white/60">Discover opportunities that match your profile</p>
+          <p className="text-zinc-400 font-medium">Discover opportunities that match your profile</p>
         </div>
 
         {/* Filter Bar */}
@@ -356,12 +355,12 @@ const JobResults = () => {
               exit={{ opacity: 0, height: 0 }}
               className="mb-6"
             >
-              <div className="glass-panel rounded-2xl p-6 border border-white/10">
+              <div className="bg-zinc-900/50 rounded-2xl p-6 border border-white/10">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-lg font-bold text-white">Refine your search</h3>
                   <button
                     onClick={clearFilters}
-                    className="text-xs text-white/40 hover:text-white/60 transition-colors flex items-center gap-1"
+                    className="text-xs text-zinc-500 hover:text-emerald-500 transition-colors font-bold uppercase tracking-widest flex items-center gap-1"
                   >
                     <X size={14} />
                     Clear All
@@ -371,11 +370,11 @@ const JobResults = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* Date Posted Filter */}
                   <div>
-                    <label className="block text-sm font-bold text-white/80 mb-2">Date Posted</label>
+                    <label className="block text-sm font-bold text-zinc-400 mb-2">Date Posted</label>
                     <select
                       value={activeFilters.datePosted}
                       onChange={(e) => updateFilter('datePosted', e.target.value)}
-                      className="w-full bg-slate-800/50 border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:border-primary/40 focus:outline-none"
+                      className="w-full bg-black border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:border-emerald-500/40 focus:outline-none"
                     >
                       <option value="any">Any Time</option>
                       <option value="24h">Last 24 Hours</option>
@@ -385,23 +384,23 @@ const JobResults = () => {
 
                   {/* Location Filter */}
                   <div>
-                    <label className="block text-sm font-bold text-white/80 mb-2">Location</label>
+                    <label className="block text-sm font-bold text-zinc-400 mb-2">Location</label>
                     <input
                       type="text"
                       value={activeFilters.locationSearch}
                       onChange={(e) => updateFilter('locationSearch', e.target.value)}
                       placeholder="e.g., Bangalore, Mumbai"
-                      className="w-full bg-slate-800/50 border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:border-primary/40 focus:outline-none placeholder-white/40"
+                      className="w-full bg-black border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:border-emerald-500/40 focus:outline-none placeholder-zinc-700"
                     />
                   </div>
 
                   {/* Experience Filter */}
                   <div>
-                    <label className="block text-sm font-bold text-white/80 mb-2">Experience</label>
+                    <label className="block text-sm font-bold text-zinc-400 mb-2">Experience</label>
                     <select
                       value={activeFilters.experience}
                       onChange={(e) => updateFilter('experience', e.target.value)}
-                      className="w-full bg-slate-800/50 border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:border-primary/40 focus:outline-none"
+                      className="w-full bg-black border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:border-emerald-500/40 focus:outline-none"
                     >
                       <option value="any">Any Level</option>
                       <option value="junior">Junior / Entry</option>
@@ -423,12 +422,12 @@ const JobResults = () => {
               animate={{ opacity: 1 }}
               className="text-center py-20"
             >
-              <Briefcase className="w-16 h-16 text-primary/20 mx-auto mb-4" />
+              <Briefcase className="w-16 h-16 text-emerald-500/20 mx-auto mb-4" />
               <h3 className="text-xl font-bold mb-2">No opportunities found</h3>
-              <p className="text-white/60 mb-6">Try adjusting your search criteria or check back later</p>
+              <p className="text-zinc-400 mb-6">Try adjusting your search criteria or check back later</p>
               <button
                 onClick={handleBackToAnalysis}
-                className="px-6 py-3 bg-primary text-slate-900 font-bold rounded-lg hover:shadow-lg transition-all"
+                className="px-6 py-3 bg-emerald-500 text-black font-bold rounded-lg hover:bg-emerald-400 transition-all"
               >
                 Back to Analysis
               </button>
@@ -439,18 +438,18 @@ const JobResults = () => {
               animate={{ opacity: 1 }}
               className="text-center py-20"
             >
-              <Filter className="w-16 h-16 text-primary/20 mx-auto mb-4" />
+              <Filter className="w-16 h-16 text-emerald-500/20 mx-auto mb-4" />
               <h3 className="text-xl font-bold mb-2">No jobs match these filters</h3>
-              <p className="text-white/60 mb-6">Try broadening your search criteria</p>
+              <p className="text-zinc-400 mb-6">Try broadening your search criteria</p>
               <button
                 onClick={clearFilters}
-                className="px-6 py-3 bg-primary text-slate-900 font-bold rounded-lg hover:shadow-lg transition-all mr-4"
+                className="px-6 py-3 bg-emerald-500 text-black font-bold rounded-lg hover:bg-emerald-400 transition-all mr-4"
               >
                 Clear Filters
               </button>
               <button
                 onClick={handleBackToAnalysis}
-                className="px-6 py-3 glass-panel border border-primary/30 text-primary font-bold rounded-lg hover:border-primary/60 transition-all"
+                className="px-6 py-3 bg-zinc-900 border border-emerald-500/30 text-emerald-500 font-bold rounded-lg hover:border-emerald-500/60 transition-all"
               >
                 Back to Analysis
               </button>
@@ -463,25 +462,25 @@ const JobResults = () => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className="glass-panel rounded-2xl p-6 border border-white/10 hover:border-primary/40 transition-all group hover:shadow-lg hover:shadow-primary/10 flex flex-col justify-between"
+                  className="bg-zinc-900 border border-white/10 hover:border-emerald-500/40 transition-all group hover:shadow-lg hover:shadow-emerald-500/10 flex flex-col justify-between rounded-2xl p-6"
                 >
                   <div>
                     <div className="flex justify-between items-start mb-4">
-                      <h3 className="font-bold text-lg mb-2 group-hover:text-primary transition-colors line-clamp-2">
+                      <h3 className="font-bold text-lg mb-2 group-hover:text-emerald-500 transition-colors line-clamp-2">
                         {job.title}
                       </h3>
-                      <ExternalLink className="text-primary/40 group-hover:text-primary" size={20} />
+                      <ExternalLink className="text-emerald-500/40 group-hover:text-emerald-500" size={20} />
                     </div>
                     
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm text-white/60">
+                      <div className="flex items-center gap-2 text-sm text-zinc-400 font-medium">
                         <Briefcase size={14} /> <span>{job.company}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-white/60">
+                      <div className="flex items-center gap-2 text-sm text-zinc-400">
                         <MapPin size={16} /> <span>{job.location}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-primary/80">
-                        <span className="text-primary">₹</span> <span>{job.salary}</span>
+                      <div className="flex items-center gap-2 text-sm text-emerald-500 font-bold">
+                        <span>₹</span> <span>{job.salary}</span>
                       </div>
                     </div>
                   </div>
@@ -491,7 +490,7 @@ const JobResults = () => {
                       href={job.url} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 w-full py-3 border-2 border-cyan-500/50 bg-slate-900/50 text-cyan-400 font-bold rounded-lg hover:bg-cyan-500 hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-all hover:text-black"
+                      className="flex items-center justify-center gap-2 w-full py-3 border border-emerald-500/50 bg-emerald-500/10 text-emerald-500 font-bold rounded-lg hover:bg-emerald-500 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all hover:text-black"
                     >
                       <ExternalLink size={16} />
                       Apply Now
@@ -506,27 +505,27 @@ const JobResults = () => {
         {/* Pagination Controller */}
         {filteredJobs.length > 0 && (
           <div className="mt-12 flex justify-center">
-            <div className="flex items-center gap-4 px-6 py-4 bg-slate-900/40 border border-cyan-500/20 backdrop-blur-md rounded-2xl">
+            <div className="flex items-center gap-4 px-6 py-4 bg-zinc-900 border border-white/10 rounded-2xl shadow-xl">
               {/* Previous Button */}
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1 || loadingMore}
-                className="px-4 py-2 bg-slate-900/50 border-2 border-cyan-500/50 text-cyan-400 font-bold rounded-lg hover:bg-cyan-500 hover:text-black hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 bg-black border border-emerald-500/50 text-emerald-500 font-bold rounded-lg hover:bg-emerald-500 hover:text-black hover:shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 <ArrowLeft size={16} />
                 Previous
               </button>
 
               {/* Page Indicator */}
-              <div className="px-4 py-2 bg-slate-800/50 border border-cyan-500/30 rounded-lg">
-                <span className="text-cyan-400 font-bold">Page {currentPage}</span>
+              <div className="px-4 py-2 bg-emerald-500/20 border border-emerald-500/30 rounded-lg">
+                <span className="text-emerald-500 font-bold">Page {currentPage}</span>
               </div>
 
               {/* Next Button */}
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={loadingMore || (!hasMore && jobs.length < 10)}
-                className="px-4 py-2 bg-slate-900/50 border-2 border-cyan-500/50 text-cyan-400 font-bold rounded-lg hover:bg-cyan-500 hover:text-black hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 bg-black border border-emerald-500/50 text-emerald-500 font-bold rounded-lg hover:bg-emerald-500 hover:text-black hover:shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 Next
                 <ArrowLeft size={16} className="rotate-180" />
@@ -538,15 +537,15 @@ const JobResults = () => {
         {/* Footer */}
         {filteredJobs.length > 0 && (
           <div className="mt-12 text-center">
-            <p className="text-xs text-white/40 mb-4">
+            <p className="text-xs text-zinc-500 mb-4 font-bold uppercase tracking-widest">
               {filteredJobs.length !== jobs.length 
-                ? `Showing ${filteredJobs.length} of ${jobs.length} opportunities on Page ${currentPage}` 
-                : `Showing ${filteredJobs.length} opportunities on Page ${currentPage}`
-              } • Last updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                ? `Showing ${filteredJobs.length} of ${jobs.length} roles on Page ${currentPage}` 
+                : `Showing ${filteredJobs.length} roles on Page ${currentPage}`
+              }
             </p>
             <button
               onClick={handleBackToAnalysis}
-              className="px-6 py-3 glass-panel border border-primary/30 text-primary font-bold rounded-lg hover:border-primary/60 transition-all"
+              className="px-6 py-3 bg-zinc-900 border border-zinc-700 text-zinc-400 font-bold rounded-lg hover:text-emerald-500 hover:border-emerald-500/50 transition-all uppercase tracking-widest text-sm"
             >
               Analyze Another Resume
             </button>
