@@ -4,7 +4,7 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-const authRoutes = require('./routes_fix/auth');
+const authRoutes = require('./routes/auth');
 
 // Load environment variables
 dotenv.config();
@@ -48,11 +48,11 @@ mongoose.connect(process.env.MONGO_URI)
 // --- Routes ---
 // This mounts your match routes at http://localhost:5000/api/match
 // So /generate-prep becomes http://localhost:5000/api/match/generate-prep
-app.use('/api/match', require('./routes_fix/match'));
-app.use('/api/jobs', require('./routes_fix/jobs'));
+app.use('/api/match', require('./routes/match'));
+app.use('/api/jobs', require('./routes/jobs'));
 app.use('/api/auth', authRoutes);
 app.get('/api/auth/verify', (req, res) => res.json({ message: "Auth route group is working!" }));
-app.use('/api/user', require('./routes_fix/user'));
+app.use('/api/user', require('./routes/user'));
 
 // Health Check
 app.get('/', (req, res) => {
